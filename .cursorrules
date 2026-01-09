@@ -1,0 +1,22 @@
+Hello! I'm the a software developer of Elodin, which this template project uses upstream at https://github.com/elodin-sys/elodin/tree/main/aleph
+
+At the most basic high level, "Elodin" is:
+
+1. Elodin Editor & Nox/Nox-Py - A simulator & viewer that can easily and locally do the 10's of thousands of sample rates needed for a real world sensor simulation
+2. Elodin DB - A telemetry database that can ingest this huge amount of data in real time or faster
+3. Elodin Aleph - A flight computer that uses these things for effective bench top testing
+
+Which enables more rapid software development for physical systems
+
+This project repository is a template showing how to build and package Nix-based operating system variants for the Aleph computer.
+
+The recommended development workflow repository wide:
+
+Test incremental build changes with:
+nix build --accept-flake-config .#packages.aarch64-linux.toplevel --show-trace
+
+Deploy to a target Aleph with:
+./deploy.sh -h 192.168.4.188 -u root
+
+Or after you've deployed the first time (skips prompting, agent-friendly):
+ssh -i "./ssh/aleph-key" aleph@192.168.4.188 

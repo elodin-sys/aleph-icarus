@@ -3,10 +3,11 @@
 # This flake demonstrates the recommended patterns for developing and deploying
 # software to the Aleph flight computer using Nix and NixOS.
 #
-# Three example patterns are included:
+# Four example patterns are included:
 #   1. Using packages from nixpkgs (example-nixpkgs)
 #   2. Building packages from source (example-from-source)
 #   3. Local Python application as systemd service (hello-service)
+#   4. ROS 2 Humble package using nix-ros-overlay (ros-hello)
 #
 # Build command:
 #   nix build --accept-flake-config .#packages.aarch64-linux.toplevel --show-trace
@@ -16,22 +17,30 @@
 #
 {
   nixConfig = {
-    extra-substituters = ["https://elodin-nix-cache.s3.us-west-2.amazonaws.com"];
+    extra-substituters = [
+      "https://elodin-nix-cache.s3.us-west-2.amazonaws.com"
+      "https://cache.nixos.org"
+      "https://ros.cachix.org"
+    ];
     extra-trusted-public-keys = [
       "elodin-cache-1:vvbmIQvTOjcBjIs8Ri7xlT2I3XAmeJyF5mNlWB+fIwM="
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      "ros.cachix.org-1:dSyZxI8geDCJrwgvCOHDoAfOm5sV1wCPjBkKL+38Rvo="
     ];
   };
 
   inputs = {
-    aleph.url = "github:elodin-sys/elodin?ref=7dba6c5&dir=aleph";
+    aleph.url = "github:elodin-sys/elodin?ref=5a31ec0&dir=aleph";
     flake-utils.follows = "aleph/flake-utils";
     nixpkgs.follows = "aleph/nixpkgs";
+    nix-ros-overlay.url = "github:lopsided98/nix-ros-overlay/master";
     self.submodules = true;
   };
 
   outputs = {
     nixpkgs,
     aleph,
+    nix-ros-overlay,
     self,
     ...
   }: rec {
@@ -58,6 +67,10 @@
       hello-service = final.callPackage ./nix/pkgs/hello-service.nix {
         src = ./src/hello-service;
       };
+
+      # Pattern 4: ROS 2 package using nix-ros-overlay
+      # Creates a ROS 2 Jazzy environment with demo nodes
+      ros-hello = final.callPackage ./nix/pkgs/ros-hello.nix {};
     };
 
     ###########################################################################
@@ -93,15 +106,18 @@
         # Your Custom Modules
         #######################################################################
         ./nix/modules/hello-service.nix
+        ./nix/modules/ros-hello.nix
       ];
 
       # Apply overlays (order matters!)
       # 1. jetpack: NVIDIA Jetpack packages
       # 2. aleph: Aleph-specific packages and device tree
-      # 3. default: Your custom packages
+      # 3. nix-ros-overlay: ROS 2 packages
+      # 4. default: Your custom packages
       nixpkgs.overlays = [
         aleph.overlays.jetpack
         aleph.overlays.default
+        nix-ros-overlay.overlays.default
         overlays.default
       ];
 
@@ -115,6 +131,13 @@
         enable = true;
         message = "Hello from Aleph Template Project!";
         interval = 30;  # Log every 30 seconds
+      };
+
+      #########################################################################
+      # Enable the ROS 2 Hello Service (Pattern 4 demonstration)
+      #########################################################################
+      services.ros-hello = {
+        enable = true;
       };
 
       #########################################################################
@@ -152,6 +175,15 @@
 
         # Python for scripting
         python3
+
+        # ROS 2 Humble CLI tools for manual testing
+        # Use: ros2 topic list, ros2 topic echo /chatter
+        (rosPackages.humble.buildEnv {
+          paths = with rosPackages.humble; [
+            ros-core
+            demo-nodes-py
+          ];
+        })
       ];
 
       #########################################################################
