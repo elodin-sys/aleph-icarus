@@ -1,39 +1,58 @@
-# Aleph Template Project
+# Aleph ROS 2 Template Project
 
-A template repository demonstrating the Nix-based development and deployment workflow for the [Elodin Aleph](https://github.com/elodin-sys/elodin/tree/main/aleph) flight computer.
+A template repository for robotics engineers building ROS 2 applications on the [Elodin Aleph](https://github.com/elodin-sys/elodin/tree/main/aleph) flight computer using Nix and NixOS.
 
-This project serves as a starting point for building your own custom Aleph software stack. It demonstrates three common patterns for packaging and deploying software to Aleph using NixOS.
+This project demonstrates how to integrate ROS 2 Humble with Aleph's Nix-based development workflow, providing a solid foundation for building autonomous systems, drones, and robotic platforms.
+
+## Features
+
+- **ROS 2 Humble** pre-configured and running on Aleph
+- **Nix-based reproducible builds** for reliable deployments
+- **Four packaging patterns** from simple to complex
+- **systemd integration** for production-ready services
+- **Cross-compilation support** via remote builders
 
 ## Architecture Overview
 
 ```mermaid
 flowchart TB
     subgraph flake [flake.nix]
-        inputs[Aleph + nixpkgs inputs]
+        inputs[Aleph + nixpkgs + nix-ros-overlay]
         overlay[Custom Overlay]
-        module[NixOS Module]
+        module[NixOS Modules]
     end
     
     subgraph pkgs [nix/pkgs/]
         nixpkgEx[example-nixpkgs.nix]
         sourceEx[example-from-source.nix]
         helloPkg[hello-service.nix]
+        rosPkg[ros-hello.nix]
     end
     
     subgraph mods [nix/modules/]
         helloMod[hello-service.nix]
+        rosMod[ros-hello.nix]
     end
     
-    subgraph src [src/hello-service/]
-        mainPy[main.py]
+    subgraph src [src/]
+        mainPy[hello-service/main.py]
+    end
+    
+    subgraph ros [ROS 2 Humble]
+        roscore[ros-core]
+        demos[demo-nodes-py]
+        topics["chatter topic"]
     end
     
     overlay --> nixpkgEx
     overlay --> sourceEx
     overlay --> helloPkg
+    overlay --> rosPkg
     module --> helloMod
+    module --> rosMod
     helloPkg --> src
-    helloMod --> helloPkg
+    rosPkg --> ros
+    rosMod --> topics
 ```
 
 ## Prerequisites
@@ -68,33 +87,47 @@ Test that everything compiles correctly:
 nix build --accept-flake-config .#packages.aarch64-linux.toplevel --show-trace
 ```
 
+> **Note:** The first build downloads ROS 2 packages from the [nix-ros-overlay Cachix cache](https://github.com/lopsided98/nix-ros-overlay), which significantly speeds up builds.
+
 ### 3. Deploy to Aleph
 
 Once connected to your Aleph over the network:
 
 ```bash
-./deploy.sh -h <aleph-hostname-or-ip> -u root
+./deploy.sh -h <aleph-hostname-or-ip> -u aleph
 ```
 
 For example:
 ```bash
-./deploy.sh -h aleph-24a5.local -u root
-./deploy.sh -h 192.168.4.181 -u root
+./deploy.sh -h aleph-24a5.local -u aleph
+./deploy.sh -h 192.168.4.181 -u aleph
 ```
 
-### 4. Verify Deployment
+### 4. Verify ROS 2 is Running
 
-SSH into your Aleph and check that everything is working:
+SSH into your Aleph and verify ROS 2:
 
 ```bash
 ssh -i ./ssh/aleph-key aleph@<aleph-ip>
 
-# Check the hello-service is running
-journalctl -u hello-service -f
+# Check the ROS 2 talker service is running
+systemctl status ros-hello
 
-# Try the example commands
-aleph-monitor  # btop wrapper (Pattern 1)
-lazygit        # Built from source (Pattern 2)
+# Watch the ROS 2 output
+journalctl -u ros-hello -f
+
+# List ROS 2 topics
+ros2 topic list
+
+# Echo messages from the talker
+ros2 topic echo /chatter
+```
+
+You should see output like:
+```
+[INFO] [talker]: Publishing: "Hello World: 42"
+[INFO] [talker]: Publishing: "Hello World: 43"
+...
 ```
 
 ## Initial Aleph Setup
@@ -158,11 +191,13 @@ aleph-template-project/
 ├── README.md                          # This file
 ├── nix/
 │   ├── modules/
-│   │   └── hello-service.nix          # NixOS module (Pattern 3)
+│   │   ├── hello-service.nix          # Python service module (Pattern 3)
+│   │   └── ros-hello.nix              # ROS 2 service module (Pattern 4)
 │   └── pkgs/
 │       ├── example-nixpkgs.nix        # Using nixpkgs (Pattern 1)
 │       ├── example-from-source.nix    # Building from source (Pattern 2)
-│       └── hello-service.nix          # Local Python package (Pattern 3)
+│       ├── hello-service.nix          # Local Python package (Pattern 3)
+│       └── ros-hello.nix              # ROS 2 package (Pattern 4)
 ├── src/
 │   └── hello-service/
 │       └── main.py                    # Python application source
@@ -171,9 +206,9 @@ aleph-template-project/
     └── aleph-key.pub                  # SSH public key
 ```
 
-## Three Patterns Demonstrated
+## Four Patterns Demonstrated
 
-This template demonstrates three common patterns for adding software to your Aleph:
+This template demonstrates four common patterns for adding software to your Aleph:
 
 ### Pattern 1: Using Packages from nixpkgs
 
@@ -229,13 +264,154 @@ services.hello-service = {
 
 **When to use:** For your own applications that need to run as background services.
 
+### Pattern 4: ROS 2 Package with nix-ros-overlay
+
+**Files:**
+- `nix/pkgs/ros-hello.nix` — ROS 2 environment package
+- `nix/modules/ros-hello.nix` — NixOS module with systemd service
+
+This pattern uses [nix-ros-overlay](https://github.com/lopsided98/nix-ros-overlay) to build ROS 2 environments and run ROS nodes as systemd services.
+
+```nix
+# In nix/pkgs/ros-hello.nix:
+let
+  rosEnv = rosPackages.humble.buildEnv {
+    paths = with rosPackages.humble; [
+      ros-core
+      demo-nodes-py
+      demo-nodes-cpp
+    ];
+  };
+in
+stdenv.mkDerivation {
+  # ... wrapper around ros2 run
+}
+
+# In flake.nix:
+services.ros-hello = {
+  enable = true;
+};
+```
+
+**When to use:** For ROS 2 robotics applications, sensor processing, motion control, and autonomous systems.
+
+## Adding Your Own ROS 2 Nodes
+
+### Step 1: Create Your ROS 2 Package
+
+Create a new package in `nix/pkgs/my-ros-node.nix`:
+
+```nix
+{ lib, rosPackages, stdenv, makeWrapper }:
+
+let
+  rosEnv = rosPackages.humble.buildEnv {
+    paths = with rosPackages.humble; [
+      ros-core
+      rclpy           # Python ROS 2 client
+      std-msgs        # Standard message types
+      sensor-msgs     # Sensor message types
+      geometry-msgs   # Geometry message types
+      # Add more ROS packages as needed
+    ];
+  };
+in
+stdenv.mkDerivation {
+  pname = "my-ros-node";
+  version = "1.0.0";
+
+  dontUnpack = true;
+  nativeBuildInputs = [ makeWrapper ];
+
+  installPhase = ''
+    mkdir -p $out/bin
+    makeWrapper ${rosEnv}/bin/ros2 $out/bin/my-ros-node \
+      --add-flags "run my_package my_node"
+  '';
+}
+```
+
+### Step 2: Create a NixOS Module
+
+Create `nix/modules/my-ros-node.nix`:
+
+```nix
+{ config, lib, pkgs, ... }:
+
+with lib;
+
+let cfg = config.services.my-ros-node;
+in {
+  options.services.my-ros-node = {
+    enable = mkEnableOption "My ROS 2 node";
+  };
+
+  config = mkIf cfg.enable {
+    systemd.services.my-ros-node = {
+      description = "My ROS 2 Node";
+      after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
+
+      environment = {
+        HOME = "/var/lib/my-ros-node";
+        ROS_HOME = "/var/lib/my-ros-node/.ros";
+        ROS_LOG_DIR = "/var/lib/my-ros-node/.ros/log";
+      };
+
+      serviceConfig = {
+        ExecStart = "${pkgs.my-ros-node}/bin/my-ros-node";
+        StateDirectory = "my-ros-node";
+        Restart = "always";
+      };
+    };
+  };
+}
+```
+
+### Step 3: Wire It Up in flake.nix
+
+Add to the overlay and enable the module:
+
+```nix
+# In overlays.default:
+my-ros-node = final.callPackage ./nix/pkgs/my-ros-node.nix {};
+
+# In nixosModules.default imports:
+./nix/modules/my-ros-node.nix
+
+# Enable the service:
+services.my-ros-node.enable = true;
+```
+
+## Available ROS 2 Packages
+
+The [nix-ros-overlay](https://github.com/lopsided98/nix-ros-overlay) provides 1500+ ROS 2 packages for Humble. Common packages include:
+
+| Category | Packages |
+|----------|----------|
+| **Core** | `ros-core`, `rclpy`, `rclcpp` |
+| **Messages** | `std-msgs`, `sensor-msgs`, `geometry-msgs`, `nav-msgs` |
+| **Perception** | `image-transport`, `cv-bridge`, `pcl-ros` |
+| **Navigation** | `nav2-bringup`, `slam-toolbox`, `robot-localization` |
+| **Control** | `ros2-control`, `ros2-controllers` |
+| **Visualization** | `rviz2`, `rqt` |
+| **Simulation** | `gazebo-ros-pkgs` |
+
+To find available packages:
+```bash
+# In a nix repl:
+nix repl
+:lf .
+rosPackages.humble.<TAB>
+```
+
 ## Customizing for Your Project
 
 ### Step 1: Fork/Clone This Repository
 
 ```bash
-git clone https://github.com/elodin-sys/aleph-template-project.git my-aleph-project
-cd my-aleph-project
+git clone https://github.com/elodin-sys/aleph-template-project.git my-robot-project
+cd my-robot-project
 rm -rf .git
 git init
 ```
@@ -244,7 +420,7 @@ git init
 
 ```bash
 rm ssh/aleph-key ssh/aleph-key.pub
-ssh-keygen -t ed25519 -f ssh/aleph-key -C "my-aleph-project"
+ssh-keygen -t ed25519 -f ssh/aleph-key -C "my-robot-project"
 ```
 
 Update `flake.nix` with your new public key:
@@ -256,30 +432,30 @@ users.users.aleph = {
 };
 ```
 
-### Step 3: Add Your Own Packages
+### Step 3: Customize ROS 2 Packages
 
-1. Create a new file in `nix/pkgs/your-package.nix`
-2. Add it to the overlay in `flake.nix`:
-   ```nix
-   overlays.default = final: prev: {
-     your-package = final.callPackage ./nix/pkgs/your-package.nix {};
-   };
-   ```
-3. Include it in `environment.systemPackages` or create a module for it
+Edit `nix/pkgs/ros-hello.nix` to include the ROS 2 packages your robot needs:
 
-### Step 4: Add Your Own Services
+```nix
+rosEnv = rosPackages.humble.buildEnv {
+  paths = with rosPackages.humble; [
+    ros-core
+    sensor-msgs
+    geometry-msgs
+    nav-msgs
+    tf2-ros
+    robot-state-publisher
+    # Your custom packages...
+  ];
+};
+```
 
-1. Create your application source in `src/your-service/`
-2. Create a package in `nix/pkgs/your-service.nix`
-3. Create a NixOS module in `nix/modules/your-service.nix`
-4. Import the module in `flake.nix` and enable it
-
-### Step 5: Remove Example Code
+### Step 4: Remove Example Code
 
 Once you're comfortable, remove the example patterns:
 - Delete `nix/pkgs/example-*.nix`
-- Delete `nix/modules/hello-service.nix` and related files
-- Remove references from `flake.nix`
+- Delete `nix/modules/hello-service.nix` and `src/hello-service/`
+- Keep or modify `ros-hello` as a starting point
 
 ## Deployment Options
 
@@ -288,7 +464,7 @@ Once you're comfortable, remove the example patterns:
 Uses your local machine or configured remote builders:
 
 ```bash
-./deploy.sh -h <host> -u <user>
+./deploy.sh -h <host> -u aleph
 ```
 
 ### Build on Aleph (Slower)
@@ -296,7 +472,7 @@ Uses your local machine or configured remote builders:
 If you don't have an aarch64 builder, the script will automatically build on the Aleph itself:
 
 ```bash
-./deploy.sh -h <host> -u <user>
+./deploy.sh -h <host> -u aleph
 # Script will detect missing builder and use Aleph
 ```
 
@@ -305,10 +481,38 @@ If you don't have an aarch64 builder, the script will automatically build on the
 Force local/configured builder usage:
 
 ```bash
-./deploy.sh -h <host> -u <user> --no-aleph-builder
+./deploy.sh -h <host> -u aleph --no-aleph-builder
 ```
 
 ## Troubleshooting
+
+### ROS 2 Service Not Starting
+
+```bash
+# Check service status
+systemctl status ros-hello
+
+# View detailed logs
+journalctl -u ros-hello -f
+
+# Common issues:
+# 1. Log directory permissions - ensure StateDirectory is set
+# 2. Missing ROS packages - check rosEnv paths
+# 3. Environment variables - verify HOME/ROS_HOME are set
+```
+
+### ROS 2 Topics Not Visible
+
+```bash
+# Ensure ROS 2 environment is sourced
+ros2 topic list
+
+# Check if the node is running
+ros2 node list
+
+# Verify network settings (for multi-machine setups)
+export ROS_DOMAIN_ID=0
+```
 
 ### Can't Connect to Aleph
 
@@ -317,20 +521,16 @@ Force local/configured builder usage:
 3. **Fall back to serial:** Connect via FTDI and check network config
 4. **Check WiFi:** Run `iwctl` to verify/reconfigure WiFi
 
-### Serial Connection Issues
+### Build Failures
 
-```bash
-# macOS: Find the device
-ls /dev/tty.usbserial-*
+1. **Hash mismatch:** Update the hash in your package definition
 
-# Linux: Find the device
-ls /dev/ttyUSB*
+2. **Missing ROS dependencies:** Add packages to your `rosEnv.paths`
 
-# Connect (115200 baud)
-screen /dev/tty.usbserial-XXXXX 115200
-
-# Exit screen: Ctrl+A, then K, then Y
-```
+3. **Evaluation errors:** Run with `--show-trace` for detailed errors
+   ```bash
+   nix build --accept-flake-config .#packages.aarch64-linux.toplevel --show-trace
+   ```
 
 ### SSH Key Not Working
 
@@ -340,43 +540,12 @@ screen /dev/tty.usbserial-XXXXX 115200
    chmod 600 ssh/aleph-key
    ```
 
-2. Ensure the public key is in `flake.nix`:
+2. Ensure the public key is in `flake.nix`
+
+3. Use the `aleph` user (not `root`) for deployment:
    ```bash
-   cat ssh/aleph-key.pub
-   # Compare with openssh.authorizedKeys.keys in flake.nix
+   ./deploy.sh -h <host> -u aleph
    ```
-
-3. Redeploy after any key changes:
-   ```bash
-   ./deploy.sh -h <host> -u root
-   ```
-
-### Build Failures
-
-1. **Hash mismatch:** Update the hash in your package definition
-   ```bash
-   # The error will show the expected hash, copy it
-   ```
-
-2. **Missing dependencies:** Check `buildInputs` and `nativeBuildInputs`
-
-3. **Evaluation errors:** Run with `--show-trace` for detailed errors
-   ```bash
-   nix build --accept-flake-config .#packages.aarch64-linux.toplevel --show-trace
-   ```
-
-### Service Not Starting
-
-```bash
-# Check service status
-systemctl status hello-service
-
-# View logs
-journalctl -u hello-service -f
-
-# Restart service
-systemctl restart hello-service
-```
 
 ## Useful Commands
 
@@ -386,8 +555,11 @@ systemctl restart hello-service
 # Build the system
 nix build --accept-flake-config .#packages.aarch64-linux.toplevel
 
+# Note for the first deploy you need to deploy as root to install the user and key
+./deploy.sh -h <host> -u root # it will prompt you for password: "root"
+
 # Deploy to Aleph
-./deploy.sh -h <host> -u root
+./deploy.sh -h <host> -u aleph # no prompt, seamless deploy
 
 # SSH to Aleph
 ssh -i ./ssh/aleph-key aleph@<host>
@@ -396,13 +568,20 @@ ssh -i ./ssh/aleph-key aleph@<host>
 ### On the Aleph
 
 ```bash
+# ROS 2 commands
+ros2 topic list
+ros2 topic echo /chatter
+ros2 node list
+ros2 node info /talker
+
+# Service management
+systemctl status ros-hello
+journalctl -u ros-hello -f
+systemctl restart ros-hello
+
 # System info
 neofetch
 btop
-
-# Service management
-systemctl status hello-service
-journalctl -u hello-service -f
 
 # Network info
 ip addr
@@ -414,13 +593,20 @@ nixos-rebuild list-generations
 
 ## Resources
 
+### Elodin & Aleph
 - [Elodin GitHub Repository](https://github.com/elodin-sys/elodin)
 - [Elodin Documentation](https://docs.elodin.systems)
 - [Aleph Modules Source](https://github.com/elodin-sys/elodin/tree/main/aleph)
+
+### ROS 2 & nix-ros-overlay
+- [nix-ros-overlay](https://github.com/lopsided98/nix-ros-overlay) - ROS packages for Nix
+- [ROS 2 Humble Documentation](https://docs.ros.org/en/humble/)
+- [ROS 2 Tutorials](https://docs.ros.org/en/humble/Tutorials.html)
+
+### Nix
 - [NixOS Manual](https://nixos.org/manual/nixos/stable/)
 - [Nix Pills (Learning Resource)](https://nixos.org/guides/nix-pills/)
 
 ## License
 
 This template is provided under the Apache-2.0 license. See [LICENSE](LICENSE) for details.
-
