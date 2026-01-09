@@ -2,6 +2,8 @@
 
 A template repository for robotics engineers building ROS 2 applications on the [Elodin Aleph](https://github.com/elodin-sys/elodin/tree/main/aleph) flight computer using Nix and NixOS.
 
+https://github.com/user-attachments/assets/355d2ed5-3a75-4ed8-87d7-46d50a259fa0
+
 This project demonstrates how to integrate ROS 2 Humble with Aleph's Nix-based development workflow, providing a solid foundation for building autonomous systems, drones, and robotic platforms.
 
 ## Features
