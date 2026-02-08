@@ -30,7 +30,7 @@
   };
 
   inputs = {
-    aleph.url = "github:elodin-sys/elodin?ref=5a31ec0&dir=aleph";
+    aleph.url = "github:elodin-sys/elodin?ref=main&dir=aleph";
     flake-utils.follows = "aleph/flake-utils";
     nixpkgs.follows = "aleph/nixpkgs";
     nix-ros-overlay.url = "github:lopsided98/nix-ros-overlay/master";

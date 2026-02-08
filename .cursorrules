@@ -12,7 +12,10 @@ This project repository is a template showing how to build and package Nix-based
 
 The recommended development workflow repository wide:
 
-Test incremental build changes with:
+Develop features locally using a nix develop shell:
+nix develop
+
+Test incremental Aleph build changes with:
 nix build --accept-flake-config .#packages.aarch64-linux.toplevel --show-trace
 
 Deploy to a target Aleph with:
