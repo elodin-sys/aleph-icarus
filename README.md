@@ -187,19 +187,22 @@ ping aleph-XXXX.local  # where XXXX is the last 4 chars of the serial number
 
 ```
 aleph-template-project/
-├── flake.nix                          # Main Nix configuration
+├── flake.nix                          # Main Nix configuration (overlay, modules, dev shell)
 ├── flake.lock                         # Locked dependency versions
 ├── deploy.sh                          # Deployment script
 ├── README.md                          # This file
 ├── nix/
 │   ├── modules/
 │   │   ├── hello-service.nix          # Python service module (Pattern 3)
-│   │   └── ros-hello.nix              # ROS 2 service module (Pattern 4)
+│   │   ├── ros-hello.nix              # ROS 2 service module (Pattern 4)
+│   │   └── python-env.nix             # Unified Python environment (pyzed, numpy, opencv, etc.)
 │   └── pkgs/
 │       ├── example-nixpkgs.nix        # Using nixpkgs (Pattern 1)
 │       ├── example-from-source.nix    # Building from source (Pattern 2)
 │       ├── hello-service.nix          # Local Python package (Pattern 3)
-│       └── ros-hello.nix              # ROS 2 package (Pattern 4)
+│       ├── ros-hello.nix              # ROS 2 package (Pattern 4)
+│       ├── zed-sdk.nix                # Stereolabs ZED SDK (x86_64 + Jetson)
+│       └── pyzed.nix                  # ZED Python API (built from source)
 ├── src/
 │   └── hello-service/
 │       └── main.py                    # Python application source
@@ -459,6 +462,36 @@ Once you're comfortable, remove the example patterns:
 - Delete `nix/modules/hello-service.nix` and `src/hello-service/`
 - Keep or modify `ros-hello` as a starting point
 
+## ZED Camera Development (Local)
+
+This project includes a Nix dev shell with the [Stereolabs ZED SDK](https://www.stereolabs.com/developers/) 5.1 and Python bindings (pyzed, numpy, OpenCV, matplotlib), ready for use with a ZED camera connected to your x86_64 Ubuntu laptop via USB.
+
+### Getting Started
+
+Connect your ZED camera via USB, then:
+
+```bash
+nix develop
+```
+
+On the first run the shell will ask for your sudo password to install USB access rules for the camera (one-time). After that, every `nix develop` is instant.
+
+### Show a Live Video Stream
+
+Open a live camera feed with OpenCV (press `q` to quit):
+
+```bash
+python3 src/zed-viewer.py
+```
+
+### Quick Smoke Test (No Display Required)
+
+Verify the SDK can talk to the camera without needing a GUI:
+
+```bash
+python3 src/zed-test.py
+```
+
 ## Deployment Options
 
 ### Standard Deployment (Recommended)
@@ -466,7 +499,7 @@ Once you're comfortable, remove the example patterns:
 Uses your local machine or configured remote builders:
 
 ```bash
-./deploy.sh -h <host> -u aleph
+./deploy.sh -h <host> -u aleph -k ./ssh/aleph-key
 ```
 
 ### Build on Aleph (Slower)
@@ -474,7 +507,7 @@ Uses your local machine or configured remote builders:
 If you don't have an aarch64 builder, the script will automatically build on the Aleph itself:
 
 ```bash
-./deploy.sh -h <host> -u aleph
+./deploy.sh -h <host> -u aleph -k ./ssh/aleph-key
 # Script will detect missing builder and use Aleph
 ```
 
@@ -483,7 +516,7 @@ If you don't have an aarch64 builder, the script will automatically build on the
 Force local/configured builder usage:
 
 ```bash
-./deploy.sh -h <host> -u aleph --no-aleph-builder
+./deploy.sh -h <host> -u aleph -k ./ssh/aleph-key --no-aleph-builder
 ```
 
 ## Troubleshooting
