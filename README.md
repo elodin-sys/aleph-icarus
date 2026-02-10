@@ -502,7 +502,7 @@ ssh -X -i ./ssh/aleph-key aleph@<aleph-ip> "python3 zed-viewer-remote.py"
 ```
 
 A window will appear on your laptop showing the Aleph's camera feed. Press `q` to quit.
-*Note*: for best results, use a powered USB-C hub connected to the Aleph, to avoid any negotiation issues.
+*Note*: for best results, use a powered USB-C 3.0 hub connected to the Aleph SuperSpeed port (middle side), to avoid any negotiation issues.
 
 ## Deployment Options
 
