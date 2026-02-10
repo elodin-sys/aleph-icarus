@@ -40,7 +40,7 @@ in {
     aleph-icarus.pythonEnv = pkgs.python3.withPackages (ps: with ps; [
       numpy
       matplotlib
-      opencv4
+      (opencv4.override { enableGtk3 = true; })
     ]
     # pyzed and zed-sdk are from our overlay
     ++ [ pkgs.pyzed ]

@@ -492,6 +492,18 @@ Verify the SDK can talk to the camera without needing a GUI:
 python3 src/zed-test.py
 ```
 
+### View from Aleph over SSH
+
+With a ZED camera plugged into the Aleph, you can view the live feed on your laptop using SSH X11 forwarding. Copy the remote viewer script to the Aleph and run it:
+
+```bash
+scp -i ./ssh/aleph-key src/zed-viewer-remote.py aleph@<aleph-ip>:
+ssh -X -i ./ssh/aleph-key aleph@<aleph-ip> "python3 zed-viewer-remote.py"
+```
+
+A window will appear on your laptop showing the Aleph's camera feed. Press `q` to quit.
+*Note*: for best results, use a powered USB-C hub connected to the Aleph, to avoid any negotiation issues.
+
 ## Deployment Options
 
 ### Standard Deployment (Recommended)

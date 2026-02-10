@@ -228,6 +228,7 @@
           PasswordAuthentication = true;
           PubkeyAuthentication = true;
           PermitRootLogin = "yes";
+          X11Forwarding = true;
         };
       };
 
